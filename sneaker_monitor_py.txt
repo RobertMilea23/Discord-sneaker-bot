@@ -1,0 +1,162 @@
+from typing import ItemsView, Text
+from bs4 import BeautifulSoup
+from random_user_agent.params import SoftwareName, HardwareType
+from random_user_agent.user_agent import UserAgent
+from discord_webhook import DiscordWebhook, DiscordEmbed
+import json,logging,traceback,datetime,time,requests,urllib3
+
+import urllib3
+requests.exceptions.RequestException
+import random
+
+def loadProxy():
+    with open('proxies.txt','r') as proxyIn:
+        proxyInput = proxyIn.read().splitlines()
+    
+    proxyList = [i for i in proxyInput]
+    p = random.choice(proxyList)
+    p = p.split(':')
+    try:
+        proxies = {
+            'http':f'http://{p[2]}:{p[3]}@{p[0]}:{p[1]}',
+            'https':f'http://{p[2]}:{p[3]}@{p[0]}:{p[1]}'
+        }
+    except:
+        proxies = {
+            'http':f'http://{p[0]}:{p[1]}',
+            'https':f'http://{p[0]}:{p[1]}'
+        }
+    return proxies
+
+keyword_list = ["dunk low","jordan 1","jordan one" , "dunk high" ,"retro" , "mid"]
+unfiltered_webhook_url = "https://discord.com/api/webhooks/1012106747885924532/1X9AV0au2lUh1N6MWFG1ygYSjmOCAYqUlzSeTe9Yc39rop2DxCItjKLKtmLyCKMMUgbq"
+filtered_webhook_url = "https://discord.com/api/webhooks/1012106638712373308/OugIhUg-Bw2-XgWwdKRlVsZXhY46k5TPQ0j2rhpHrItLa7MWAnFuHdfzLAkONtXfpNx0"
+
+def check_for_keyword(product_title):
+    keyword_match = False
+    for keyword in keyword_list:
+        if keyword.lower() in product_title.lower():
+            keyword_match = True
+
+    return(keyword_match)
+
+INSTOCK = []
+
+def monitor():
+    while True:
+        error_occured_timeout = False
+        time.sleep(10)
+        headers = {
+            'authority': 'sneakerindustry.ro',
+            'method': 'GET',
+            'path': '/ro/1_nike',
+            'scheme': 'https',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'accept-encoding': 'gzip, deflate, br',
+            'accept-language': 'en-US,en;q=0.9',
+            'cache-control': 'max-age=0',
+            'sec-ch-ua': '".Not/A)Brand";v="99", "Google Chrome";v="103", "Chromium";v="103"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+        }
+        try:
+            site = requests.get('https://sneakerindustry.ro/ro/1_nike',headers=headers,proxies=loadProxy()).text
+        except:
+            print("[ERROR] Timeout Occured (prolly ban)")
+            error_occured_timeout = True
+        if not error_occured_timeout:
+            soup = BeautifulSoup(site , 'lxml')
+    
+            items = []
+
+            url = 'https://sneakerindustry.ro/ro/1_nike'
+            try:
+                s = requests.Session()
+                html = s.get(url=url, verify=False, timeout=25,proxies=loadProxy())
+            except:
+                print("[ERROR] Timeout Occured (prolly ban)")
+                error_occured_timeout = True
+            if not error_occured_timeout:
+                soup = BeautifulSoup(html.text, 'html.parser')
+                products = soup.find_all('article', {'class': 'product-miniature home-product'})#product-info text-center
+                for product in products:
+                    try:
+                        item = [
+                        product.find('a')['href'],  
+                        product.find('img')['alt'],
+                        product.find('img')['src'],
+                        product.find('div', class_='product-price-and-shipping').text
+                        ]
+                
+            
+                        items.append(item)
+                        comparitor(item,0)
+                        print(f"[{datetime.datetime.now()}] NEW PRODUCT FOUND: {item[0]}")
+                        continue
+                    except Exception as e:
+                        print(e)
+                        pass
+def checker(product_details):
+    
+    return product_details in INSTOCK
+
+def comparitor(product_details, start):
+    if not checker(product_details):
+        
+        print(product_details)
+        INSTOCK.append(product_details)
+        if start == 0:
+            sendweebhook(product_details)
+
+def remove_duplicates(mylist):
+    
+    
+    return [list(t) for t in set(tuple(element) for element in mylist)]
+
+
+
+def sendweebhook(item):
+
+    webhook = DiscordWebhook(url=unfiltered_webhook_url)
+
+    embed = DiscordEmbed(title='Sportselct', color='068806')
+    embed = DiscordEmbed(title=item[1], url=item[0], color='068806')
+    embed.set_author(name='NEW PRODUCT') 
+    embed.set_footer(text='Made by Xclusive' , icon_url='https://cdn.discordapp.com/attachments/1002515511759876206/1012117146345672724/xclusive_ro_2.jpg')
+    embed.set_timestamp()
+    embed.add_embed_field(name='Pret', value=item[3])
+    embed.add_embed_field(name='Checkout link:', value='[Click](https://sneakerindustry.ro/ro/module/supercheckout/supercheckout)')
+    embed.add_embed_field(name='Site', value='Sneaker-Industry :flag_ro:')
+    embed.set_thumbnail(url=item[2])
+    
+    
+
+    webhook.add_embed(embed)
+    response = webhook.execute()
+
+    if check_for_keyword(item[1]):
+        webhook = DiscordWebhook(url=filtered_webhook_url)
+
+        embed = DiscordEmbed(title='AAsport', color='068806')
+        embed = DiscordEmbed(title=item[1], url=item[0], color='068806')
+        embed.set_author(name='NEW PRODUCT') 
+        embed.set_footer(text='Made by Xclusive' , icon_url='https://cdn.discordapp.com/attachments/1002515511759876206/1012117146345672724/xclusive_ro_2.jpg')
+        embed.set_timestamp()
+        embed.add_embed_field(name='Pret', value=item[3])
+        embed.add_embed_field(name='Checkout link:', value='[Click](https://sneakerindustry.ro/ro/module/supercheckout/supercheckout)')
+        embed.add_embed_field(name='Site', value='Sneaker-Industry :flag_ro:')
+        embed.set_thumbnail(url=item[2])
+        
+        webhook.add_embed(embed)
+        response = webhook.execute()
+
+monitor()
+
+
+
